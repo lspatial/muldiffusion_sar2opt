@@ -1,0 +1,51 @@
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+import os
+import glob
+import numpy as np
+
+
+def find_tif_files(image_path):
+    # Case-insensitive patterns
+    patterns = [
+        "*.tif", "*.TIF", "*.tiff", "*.TIFF"
+    ]
+
+    tif_files = []
+    for pattern in patterns:
+        tif_files.extend(glob.glob(os.path.join(image_path, pattern)))
+
+    return tif_files
+
+def get_unique_pixels_from_tifs(image_path):
+    # Find all .tif files
+    tif_files = find_tif_files(image_path)
+
+    all_unique_values = set()
+
+    # Transform to tensor
+    transform = transforms.Compose([
+        transforms.ToTensor()
+    ])
+
+    for tif_file in tif_files:
+        # Load image
+        image = Image.open(tif_file)
+
+        # Convert to tensor
+        tensor_img = transform(image)
+
+        # Get unique values
+        unique_values = torch.unique(tensor_img)
+
+        # Add to global set (convert to numpy for set operations)
+        all_unique_values.update(unique_values.numpy().flatten())
+
+    return sorted(list(all_unique_values))
+
+
+# Usage
+image_path = "D/wdataspace/WHU-OPT-SAR/lbl"
+unique_pixels = get_unique_pixels_from_tifs(image_path)
+print(f"Unique pixel values: {unique_pixels}")

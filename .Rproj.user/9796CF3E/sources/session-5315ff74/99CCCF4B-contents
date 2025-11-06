@@ -1,0 +1,90 @@
+import torch
+from dataset.gdifdataset import create_dataloaders
+import argparse
+from mappingknow.swin_transformer_config import get_config
+from mappingknow.swinunettrain import SwinUnet_Trainer
+import warnings
+warnings.filterwarnings("ignore")
+from mappingknow.trainhelp import silence_all_warnings
+
+silence_all_warnings()
+
+def configArgs():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str,
+                        default='/devb/WHU-OPT-SAR/jointpatch256full', help='Data path for samples: default: default path')
+    parser.add_argument('--pretrained_file', type=str,
+                        default=None, help='Pretrained model file: default: no protrained')
+    parser.add_argument('--pretrained_base_file', type=str,
+                        default='/devf/tfpretrained/swinunet/swin_tiny_patch4_window7_224.pth',
+                        help='Pretrained base model file: default: no protrained')
+    parser.add_argument('--output_root', type=str,
+                        default='/devb/sar2opt_diff/mapping_newtest_MSE', help='Root path fot the duty training')
+    parser.add_argument('--duty_flag', type=str,
+                        default=None, help='Duty name as the key of the duty target sub_path')
+    parser.add_argument('--in_channel', type=int,
+                        default=1, help='The number of channels of the input image')
+    parser.add_argument('--clip_value', type=float,
+                        default=1, help='Clip value for gradient clipping')
+    parser.add_argument('--clip_norm', type=float,
+                        default=None, help='Clip norm for gradient clipping')
+    parser.add_argument('--gpu', type=int, default=2, help='Gpu index. (Default 0)')
+    parser.add_argument('--optimizer', type=str,
+                        default='sgd', help='Optimizer. (Default sgd)')
+    parser.add_argument('--num_classes', type=int,
+                        default=3, help='output channel of network')  # 分类类别
+    parser.add_argument('--num_epoch', type=int,
+                        default=160, help='epoch number to train')  # 最大迭代次数
+    parser.add_argument('--batch_size', type=int,
+                        default=128, help='batch_size per gpu')
+    parser.add_argument('--base_lr', type=float, default=0.003,
+                        help='learning rate')  # 学习率
+    parser.add_argument('--img_size', type=int,
+                        default=256, help='input patch size of network input')  # 图像大小
+    parser.add_argument('--seed', type=int,
+                        default=1, help='random seed')  # 随机种子
+    parser.add_argument('--cfg', type=str,
+                        default='/devf/tfpretrained/swinunet/swin_tiny_patch4_window7_224_lite.yaml',
+                        metavar="FILE", help='path to config file')
+    parser.add_argument('--resume', help='resume from checkpoint')
+    parser.add_argument('--accumulation-steps', type=int, help="gradient accumulation steps")
+    parser.add_argument('--use-checkpoint', action='store_true',
+                        help="whether to use gradient checkpointing to save memory")
+    parser.add_argument('--amp-opt-level', type=str, default='O1', choices=['O0', 'O1', 'O2'],
+                        help='mixed precision opt level, if O0, no amp is used')
+    parser.add_argument('--loss', type=str, default='MSE', choices=['MSE','SIMMMAE', 'SIMMMSE'],
+                        help='Loss function ')
+    parser.add_argument('--tag', help='tag of experiment')
+    parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
+    parser.add_argument('--throughput', action='store_true', help='Test throughput only')
+    parser.add_argument('--deterministic', type=int, default=1,
+                        help='whether use deterministic training')
+    parser.add_argument(
+        "--opts",
+        help="Modify config options by adding 'KEY VALUE' pairs. ",
+        default=None,
+        nargs='+',
+    )
+    parser.add_argument('--zip', action='store_true', help='use zipped dataset instead of folder dataset')
+    parser.add_argument('--cache-mode', type=str, default='part', choices=['no', 'full', 'part'],
+                        help='no: no cache, '
+                             'full: cache all data, '
+                             'part: sharding the dataset into nonoverlapping pieces and only cache one piece')
+    args = parser.parse_args()
+    config = get_config(args)
+    return args,config
+
+
+def maintrain():
+    args,config = configArgs()
+    train_loader, test_loader = create_dataloaders(args.data_path, channels=3, batch_size=args.batch_size, num_workers=4,
+                                                  apply_augmentation=True, val_split=0.2, subset_size=None,
+                                                  resize_to=None,crop_size=224)
+    swintrainer = SwinUnet_Trainer(config,args.in_channel,args.output_root)
+    device = torch.device('cuda:' + str(args.gpu))
+    swintrainer.train(args.optimizer,args,train_loader,test_loader,loss=args.loss,pretrained_file=None,
+                      pretrained_base_file=args.pretrained_base_file,device=device)
+
+if __name__ == '__main__':
+    maintrain()

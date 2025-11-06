@@ -1,0 +1,219 @@
+import argparse
+import os
+import shutil
+import sys
+from guided_diffusion.resample import create_named_schedule_sampler
+from guided_diffusion.script_util_txt import (
+    model_and_diffusion_defaults,
+    create_model_and_diffusion,
+    args_to_dict,
+    add_dict_to_argparser,
+)
+import torch
+from guided_diffusion.train_test_textinf import TrainLoop
+from dataset.gdifdatasettxt import create_dataloaders
+import warnings
+warnings.filterwarnings("ignore")
+from mappingknow.trainhelp import silence_all_warnings
+
+silence_all_warnings()
+
+def parse_int_list(value):
+    """Parse string like '[0,2,3]' or '0,2,3' into list of integers"""
+    # Remove brackets and spaces
+    value = value.strip('[]').replace(' ', '')
+    # Split by comma and convert to int
+    return [int(x) for x in value.split(',') if x]
+
+def configArgs():
+    parser = argparse.ArgumentParser()
+    #Data and pretrained file
+    parser.add_argument('--data_path', type=str,
+                        default='/devb/sar2opt_diff_txt/test/selectedTestFl.csv', help='data file path')
+    parser.add_argument('--pretrained_file', type=str,
+                        default=None, help='Pretrained diffusion Unet file: default: no protrained')
+    parser.add_argument('--map_swinunet', type=str,
+                        default='/devb/sar2opt_diff/mapping_test2/model_statedict_best.tor', help='Trained SWIN-Unet file: default: no trained UNet')
+                        
+    parser.add_argument('--diffusion_trained_model', type=str,
+                        default='/devb/sar2opt_diff_txt/sar2opt_diff_sarmap_Oct2_test1_continue/model/model459600.pt',
+                        help='Trained diffusion Unet file: default: no trained model') 
+# /devb/sar2opt_diff_txt/sar2opt_diff_sarmap_Oct2_test1/model/model122400.pt    
+#/devb/sar2opt_diff_txt/sar2opt_diff_sarmap_Oct2_test1/model/model108000.pt
+    #conditions config
+    parser.add_argument('--condition_way', type=str,
+                        default='SARMAP', help='condition way:{None, SAR, SAR_MAP,SAR_LABEL,SARLABELonehot} default: SAR')
+    parser.add_argument('--original_labels', type=parse_int_list, default=[i*10 for i in range(8)],
+                        help='original_labels like [0,10,20 ... ]')
+    parser.add_argument('--label_embeddings_dim', type=int,
+                        default=16, help='label embeddings dim, default: 16')
+    #Data features and input config
+    parser.add_argument('--in_channels', type=int,
+                        default=3, help='dimension number of input (RGB) plus conditionals (SAR or SAR + mapping): default: 4')
+    parser.add_argument('--image_size', type=int,
+                        default=224, help='imgae size: default: 224')
+    parser.add_argument('--num_channels', type=int,
+                        default=128, help='base channel number: default: 128')
+    parser.add_argument('--num_res_blocks', type=int,
+                        default=2, help='number of residual blocks: default: 2')
+    #Unet and attention config
+    parser.add_argument('--num_heads', type=int,
+                        default=4, help='number of heads: default: 4')
+    parser.add_argument('--num_heads_upsample', type=int,
+                        default=-1, help='number of head unsample: default: -1')
+    parser.add_argument('--num_head_channels', type=int,
+                        default=-1, help='number of head channels: default: -1')
+    parser.add_argument('--attention_resolutions', type=str,
+                        default="16,8", help='attention resolutions: default: 16,8')
+    parser.add_argument('--channel_mult', type=str,
+                        default="", help='channel multiplification: default: ""')
+    parser.add_argument('--out_channels', type=int,
+                        default=3, help='out_channels: default: 3')
+    parser.add_argument('--num_weighted_channels', type=int,
+                        default=0, help='Weighted last channel number: default: 0')
+    parser.add_argument('--con_weight', type=float,
+                        default=0.5, help='Weight for the last channel number: default: 1')
+
+    #Computation config
+    parser.add_argument('--dropout', type=float,
+                        default=0, help='dropout rate: default: 0')
+    parser.add_argument('--class_cond', action='store_true',
+                        help='class conditions: default: False')
+    parser.add_argument('--use_checkpoint', action='store_true',
+                        help='use_checkpoint: default: False')
+    parser.add_argument('--no_use_scale_shift_norm', action='store_true',
+                        help='No use of scale_shift_norm: default: True')
+    parser.add_argument('--resblock_updown', action='store_true',
+                        help='resblock updown: default: False')
+    parser.add_argument('--use_new_attention_order', action='store_true',
+                        help='use_new_attention_order: default: False')
+    #Diffusion config
+    parser.add_argument('--schedule_sampler', type=str,
+                        default='uniform', help='schedule_sampler: default: uniform')
+    parser.add_argument('--weight_decay', type=float,
+                        default=0.0, help='weight decay: default: 0.0')
+    parser.add_argument('--lr_anneal_steps', type=float,
+                        default=0, help='lr_anneal_steps: default: 0')
+    parser.add_argument('--microbatch', type=int,
+                        default=-1,help='-1 disables microbatches: default: -1')
+
+    parser.add_argument('--ema_rate', type=str,
+                        default='0.9999',help='EMA rate: default: 0.9999')
+    parser.add_argument('--log_interval', type=int,
+                        default=10,help='log_interval: default: 10')
+    parser.add_argument('--save_interval', type=int,
+                        default=2,help='save interval: default: 2')
+    parser.add_argument('--resume_checkpoint', type=str,
+                        default='',help='checkpoint file to resume: default: ""')
+    parser.add_argument('--use_fp16', action='store_true',
+                        help='whether to use fp16: default: False')
+    parser.add_argument('--fp16_scale_growth', type=float,
+                        default=1e-3, help='fp16_scale_growth: default: 1e-3')
+
+    parser.add_argument('--diffusion_steps', type=int,
+                        default=1000, help='Diffusion steps: default: 1000')
+    parser.add_argument('--noise_schedule', type=str,
+                        default='linear', help='Noise schedule mode: default: linear')
+    parser.add_argument('--timestep_respacing', type=str,
+                        default="", help='timestep_respacing: default: ""')
+    parser.add_argument('--use_kl', action='store_true',
+                        help='Use KL: default: False')
+    parser.add_argument('--learn_sigma', action='store_true',
+                        help='learn_sigma: False')
+    parser.add_argument('--predict_xstart', action='store_true',
+                        help='predict_xstart: default: False')
+    parser.add_argument('--rescale_timesteps', action='store_true',
+                        help='rescale_timesteps: default: False')
+    parser.add_argument('--rescale_learned_sigmas', action='store_true',
+                        help='rescale_learned_sigmas: default: False')
+    #Other config
+    parser.add_argument('--output_root', type=str,
+                        default='/devb/sar2opt_diff_txt_com/test_sarmaptext',
+                        help='Root path fot the duty training')
+    parser.add_argument('--duty_flag', type=str,
+                        default=None, help='Duty name as the key of the duty target sub_path')
+
+    parser.add_argument('--clip_value', type=float,
+                        default=None, help='Clip value for gradient clipping')
+    parser.add_argument('--clip_norm', type=float,
+                        default=None, help='Clip norm for gradient clipping')
+    parser.add_argument('--gpu', type=int, default=0, help='Gpu index. (Default 0)')
+    parser.add_argument('--optimizer', type=str,
+                        default='sgd', help='Optimizer. (Default sgd)')
+
+    parser.add_argument('--num_epochs', type=int,
+                        default=2, help='total epoch number to train')  # 最大迭代次数
+    parser.add_argument('--batch_size', type=int,
+                        default=3, help='batch_size per gpu')
+
+    parser.add_argument('--base_lr', type=float, default=1e-4,
+                        help='learning rate')  # 学习率
+    parser.add_argument('--seed', type=int,
+                        default=1, help='random seed')  # 随机种子
+    parser.add_argument('--subset', type=int,
+                        default=None, help='Test samples')  # 随机种子
+    args = parser.parse_args()
+    setattr(args, 'use_scale_shift_norm', not args.no_use_scale_shift_norm)
+    config = args_to_dict(args, model_and_diffusion_defaults().keys())
+    #Adjust the dimension number
+    config['label_embeddings_dim'] = args.label_embeddings_dim
+    if args.condition_way == 'SAR':
+        config['in_channels'] +=1
+    elif args.condition_way == 'SARMAP':
+        config['num_weighted_channels'] = 3
+        config['con_weight'] = 0.5
+        config['in_channels'] += 4
+    elif args.condition_way == 'SARLABEL':
+        config['in_channels'] += 1+args.label_embeddings_dim
+    elif args.condition_way == 'SARMAPLABEL':
+        config['in_channels'] += 4+args.label_embeddings_dim
+    elif args.condition_way == 'SARLABELonehot':
+        config['in_channels'] += 9
+        config['num_weighted_channels']=8
+        config['con_weight']=0.5
+    config['original_labels']=args.original_labels
+    return args, config
+
+def main():
+    args,config = configArgs()
+    os.makedirs(args.output_root, exist_ok=True)
+    device = torch.device('cuda:'+str(args.gpu))
+    model, diffusion = create_model_and_diffusion(**config)
+    model.to(device)
+    if args.diffusion_trained_model is not None:
+          staticstate = torch.load(args.diffusion_trained_model,weights_only=False,map_location=device)
+          model.load_state_dict(staticstate)
+
+    schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
+
+    predict_loader,_ = create_dataloaders(args.data_path,channels=3,
+           batch_size=args.batch_size, num_workers=1,apply_augmentation=False,
+            val_split=0, subset_size=args.subset, resize_to=None,crop_size=None,label2text=False)
+
+
+    mtrainer=TrainLoop(
+        model=model,
+        mode = args.condition_way,
+        diffusion=diffusion,
+        batch_size=args.batch_size,
+        microbatch=args.microbatch,
+        lr=args.base_lr,
+        ema_rate=args.ema_rate,
+        log_interval=args.log_interval,
+        save_interval=args.save_interval,
+        resume_checkpoint=args.resume_checkpoint,
+        use_fp16=args.use_fp16,
+        fp16_scale_growth=args.fp16_scale_growth,
+        schedule_sampler=schedule_sampler,
+        weight_decay=args.weight_decay,
+        lr_anneal_steps=args.lr_anneal_steps,
+        output = args.output_root,
+    )
+    mapmodel=None 
+    if args.map_swinunet is not None:
+         print("Mapping model: ",args.map_swinunet) 
+         mapmodel = torch.load(args.map_swinunet , map_location=device, weights_only=False)
+    mtrainer.predict_dataload(predict_loader,addflag='predict',mapmodel=mapmodel,ntarget=None,device=device)
+
+if __name__ == "__main__":
+    main()

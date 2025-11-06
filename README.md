@@ -1,0 +1,162 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# Multimodal Knowledge-Guided Diffusion Model for Enhanced SAR-to-Optical Image Translation
+
+**Author:** Lianfa Li
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+## Overview
+
+This library provides the implementation of our method described in the
+paper “*Enhanced SAR-to-Optical Image Translation: A Multimodal
+Knowledge-Guided Diffusion Model Approach*”.
+
+Our approach leverages three modal conditions to guide the translation
+from Synthetic Aperture Radar (SAR) to optical images:
+
+1.  **SAR images** - Input modality
+2.  **Shared embedding space** - Learned through supervised mapping
+3.  **Text descriptions** - Semantic guidance
+
+Our framework concatenates dual modalities (SAR + shared embedding
+space) and applies cross-attention between text descriptions and the
+translation encoder. This multimodal guidance significantly constrains
+the translation process, reduces randomness, and achieves
+state-of-the-art performance.
+
+<div class="figure">
+
+<img src="figs/frame.png" alt="Framework of the proposed method" width="88%" />
+<p class="caption">
+Framework of the proposed method
+</p>
+
+</div>
+
+**Pretrained diffusion Unet models** are also available at
+<https://github.com/lspatial/trained_mdiffusion/>.
+
+## Library Structure
+
+### 1. `dataset/` - Data Processing Pipeline
+
+- `datasampling.py` - Patch-based data sampling
+- `defaulttextcode.py` - Default text description: “A remote sensing
+  optical image”
+- `gdifdataset.py` - Main data access interface with DataLoader
+- `pixels2text.py` - Pixel and text encoding utilities
+- `retrievePixVal.py` - Pixel-level unique value retrieval
+
+### 2. `figs/` - Documentation Figures
+
+Contains visualization assets and framework diagrams.
+
+### 3. `guided_diffusion/` - Core Diffusion Module
+
+- `gaussian_diffusion.py` - Gaussian diffusion model implementation
+- `losses.py` - Custom loss functions
+- `train_test.py` - Training and evaluation routines
+- `unet.py` - U-Net backbone for diffusion parameter estimation
+- Additional utilities for diffusion sampling and scheduling
+
+### 4. `mappingknow/` - Embedding Space Learning
+
+- `swinunettrain.py` - Swin-UNet training for shared embedding space
+- Supervised learning modules for SAR-optical mapping
+
+### Root-Level Scripts
+
+- `mappingtrain.py` - Supervised learning for shared embedding spaces
+- `maintrain_s2on.py` - Main training script for diffusion model
+- `maintrain_s2on.sh` - Shell script wrapper for Linux training
+- `mainpredict_s2on.py` - Inference script for image generation
+- `mainpredict_s2on.sh` - Shell script wrapper for Linux prediction
+
+## Usage
+
+### Training the Diffusion Model
+
+Run the following command to train the multimodal diffusion model:
+
+``` bash
+python maintrain_s2on.py \
+    --gpu 1 \
+    --data_path /dataset \
+    --condition_way SARMAPTXT \
+    --num_epochs 10000 \
+    --output_root /tmp \
+    --save_interval 1000 \
+    --log_interval 1000 \
+    --batch_size 40 \
+    --map_swinunet /model_statedict_best.tor
+```
+
+**Parameters:**
+
+- `--gpu` - GPU device ID
+- `--data_path` - Path to training dataset
+- `--condition_way` - Conditioning strategy (SARMAPTXT for SAR +
+  mapping + text)
+- `--num_epochs` - Total training epochs
+- `--output_root` - Directory for model checkpoints and logs
+- `--save_interval` - Checkpoint saving frequency
+- `--log_interval` - Logging frequency
+- `--batch_size` - Training batch size
+- `--map_swinunet` - Path to pretrained Swin-UNet model for embedding
+  space
+
+For more parameters, please refer to the code file.
+
+### Generating Optical Images (Inference)
+
+Run the following command to generate optical images from SAR inputs:
+
+``` bash
+python mainpredict_s2on.py \
+    --gpu 1 \
+    --data_path "/predict_dataset" \
+    --condition_way SARMAPTXT \
+    --output_root "/tmp" \
+    --map_swinunet /model_statedict_best.tor
+```
+
+**Note:** Ensure the pretrained Swin-UNet model
+(`model_statedict_best.tor`) is available before running inference.
+
+## Requirements
+
+- Python 3.8+
+- PyTorch 1.10+
+- CUDA-enabled GPU (recommended)
+- Additional dependencies listed in `requirements.txt` (if available)
+
+## Citation
+
+If you use this code in your research, please cite our paper:
+
+``` bibtex
+@article{li2025enhanced,
+  title={Enhanced SAR-to-Optical Image Translation: A Multimodal Knowledge-Guided Diffusion Model Approach},
+  author={Li, Lianfa},
+  year={2025}
+}
+```
+
+## Contact
+
+**Lianfa Li**  
+Email: <lspatial@gmail.com>
+
+For questions, bug reports, or collaboration inquiries, please reach out
+via email.
+
+## License
+
+\[MIT, Apache 2.0, GPL\]
+
+------------------------------------------------------------------------
+
+*Last updated: 2025*

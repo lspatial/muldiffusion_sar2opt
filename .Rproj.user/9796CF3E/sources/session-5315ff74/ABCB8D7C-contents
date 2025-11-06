@@ -1,0 +1,15 @@
+#!/bin/bash
+
+gpu=1  
+condition_way="SARMAP" 
+num_epochs=600 
+output_root="/devb/sar2opt_diff_txt/sar2opt_maptxt_Oct02_test1_continued" 
+save_interval=900 
+log_interval=900 
+batch_size=120 
+map_swinunet="/devb/sar2opt_diff/mapping_test2/model_statedict_best.tor"
+pretrained_file="/devb/sar2opt_diff_txt/sar2opt_diff_sarmap_Oct2_test1/model/model122400.pt"
+
+python maintrain_s2on_textinf..py --gpu $gpu --condition_way $condition_way \
+         --output_root $output_root --map_swinunet $map_swinunet\
+        --batch_size $batch_size  --pretrained_file $pretrained_file
