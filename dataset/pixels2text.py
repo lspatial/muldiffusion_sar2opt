@@ -1,0 +1,102 @@
+import numpy as np
+
+
+class TextInfoRetriever:
+    def __init__(self):
+        self.class_names = {
+            0: 'background',
+            10: 'farmland',
+            20: 'city',
+            30: 'village',
+            40: 'water',
+            50: 'forest',
+            60: 'road',
+            70: 'others'
+        }
+
+    def retrieveTextInfo(self, data):
+        """Single sample processing (original method)"""
+        gray = data
+        unique, counts = np.unique(gray, return_counts=True)
+        total_pixels = gray.size
+
+        prompts_img = 'A remote sensing optical image: '
+        for value, count in zip(unique, counts):
+            percentage = (count / total_pixels) * 100
+            class_name = self.class_names.get(value, f'unknown({value})')
+            outdesc = f"{class_name}: {percentage:6.2f}% ({count:,} pixels)"
+            prompts_img += outdesc
+
+        return prompts_img
+
+    def retrieveTextInfoBatch(self, data_batch):
+        """
+        Batch processing version
+
+        Args:
+            data_batch: numpy array of shape (batch_size, height, width) or (batch_size, height, width, channels)
+
+        Returns:
+            List of text prompts, one for each sample in the batch
+        """
+        # Handle single sample case
+        if data_batch.ndim == 2:
+            return [self.retrieveTextInfo(data_batch)]
+
+        # Handle batch case
+        batch_size = data_batch.shape[0]
+        prompts_batch = []
+
+        for i in range(batch_size):
+            gray = data_batch[i]
+            unique, counts = np.unique(gray, return_counts=True)
+            total_pixels = gray.size
+
+            prompts_img = 'A remote sensing optical image: '
+            for value, count in zip(unique, counts):
+                percentage = (count / total_pixels) * 100
+                class_name = self.class_names.get(value, f'unknown({value})')
+                outdesc = f"{class_name}: {percentage:6.2f}% ({count:,} pixels)"
+                prompts_img += outdesc
+
+            prompts_batch.append(prompts_img)
+
+        return prompts_batch
+
+    def retrieveTextInfoBatchOptimized(self, data_batch):
+        """
+        Optimized batch processing using vectorized operations where possible
+
+        Args:
+            data_batch: numpy array of shape (batch_size, height, width)
+
+        Returns:
+            List of text prompts
+        """
+        if data_batch.ndim == 2:
+            return [self.retrieveTextInfo(data_batch)]
+
+        batch_size = data_batch.shape[0]
+        prompts_batch = []
+
+        # Flatten spatial dimensions for each sample
+        flattened = data_batch.reshape(batch_size, -1)
+
+        for i in range(batch_size):
+            gray_flat = flattened[i]
+            unique, counts = np.unique(gray_flat, return_counts=True)
+            total_pixels = gray_flat.size
+
+            # Vectorized percentage calculation
+            percentages = (counts / total_pixels) * 100
+
+            # Build prompt
+            prompts_img = 'A remote sensing optical image: '
+            for value, count, percentage in zip(unique, counts, percentages):
+                class_name = self.class_names.get(value, f'unknown({value})')
+                outdesc = f"{class_name}: {percentage:6.2f}% ({count:,} pixels)"
+                prompts_img += outdesc
+
+            prompts_batch.append(prompts_img)
+
+        return prompts_batch
