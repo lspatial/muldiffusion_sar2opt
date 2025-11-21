@@ -1,0 +1,12 @@
+numpy==2.3.4
+rasterio=1.4.3 
+pandas=2.3.3 
+Pillow=11.3.0 
+torch
+matplotlib
+multiprocessing
+tqdm
+gradio
+blobfile
+
+

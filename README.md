@@ -11,8 +11,8 @@
 ## Overview
 
 This library provides the implementation of our method described in the
-paper “*Enhanced SAR-to-Optical Image Translation: A Multimodal
-Knowledge-Guided Diffusion Model Approach*”.
+paper “*Enhanced SAR-to-Optical Image Translation: A Multimodal Knowledge-Guided Diffusion Model Approach*”, 
+which has been submitted to ***The Visual Computer***.
 
 Our approach leverages three modal conditions to guide the translation
 from Synthetic Aperture Radar (SAR) to optical images:
@@ -30,14 +30,18 @@ state-of-the-art performance.
 <div class="figure">
 
 <img src="figs/frame.png" alt="Framework of the proposed method" width="88%" />
-<p class="caption">
-Framework of the proposed method
+<p class="caption"> Framework of the proposed method
 </p>
 
 </div>
 
-**Pretrained diffusion Unet models** are also available at
-<https://github.com/lspatial/trained_mdiffusion/>.
+## Dataset
+To validate our method, we conduct experiments on the WHU-OPT-SAR dataset 
+(<https://github.com/AmberHen/WHU-OPT-SAR-dataset>), a comprehensive multi-modal 
+remote sensing dataset that provides co-registered optical and SAR imagery for 
+cross-modal analysis. The dataset covers approximately 51,448 km² in Hubei Province, 
+China (30-33°N, 108-117°E) at 5-meter spatial resolution. It contains 100 image pairs, 
+each measuring 5,556 × 3,704 pixels, providing substantial data for learning cross-modal correspondences.
 
 ## Library Structure
 
@@ -49,6 +53,12 @@ Framework of the proposed method
 - `gdifdataset.py` - Main data access interface with DataLoader
 - `pixels2text.py` - Pixel and text encoding utilities
 - `retrievePixVal.py` - Pixel-level unique value retrieval
+
+Using this code, we partition the original images into 224×224 non-overlapping 
+patches to balance computational efficiency and spatial context. After removing patches 
+with excessive missing data, cloud coverage, or registration artifacts, we obtained 
+approximately 29,400 valid patch pairs, split 90/10 for training and testing using 
+a spatial splitting strategy.
 
 ### 2. `figs/` - Documentation Figures
 
@@ -109,6 +119,10 @@ python maintrain_s2on.py \
   space
 
 For more parameters, please refer to the code file.
+
+**Pretrained diffusion Unet models** are also available at
+<https://github.com/lspatial/trained_mdiffusion/>. 
+On the WHU-OPT-SAR dataset, our model achieves an SSIM of 0.57 and a PSNR of 20.92 dB.
 
 ### Generating Optical Images (Inference)
 
