@@ -108,8 +108,12 @@ python maintrain_s2on.py \
 
 - `--gpu` - GPU device ID
 - `--data_path` - Path to training dataset
-- `--condition_way` - Conditioning strategy (SARMAPTXT for SAR +
-  mapping + text)
+- `--condition_way` - Conditioning strategy:
+  - `SARMAPTXT`: SAR + shared embedding space + text prompts (full model)
+  - `SARMAP`: SAR + shared embedding space
+  - `SARTXT`: SAR + text prompts
+  - `SAR`: SAR only (baseline)
+
 - `--num_epochs` - Total training epochs
 - `--output_root` - Directory for model checkpoints and logs
 - `--save_interval` - Checkpoint saving frequency
@@ -150,14 +154,15 @@ python mainpredict_s2on.py \
 ## Citation
 
 If you use this code in your research, please cite our paper:
-
 ``` bibtex
 @article{li2025enhanced,
   title={Enhanced SAR-to-Optical Image Translation: A Multimodal Knowledge-Guided Diffusion Model Approach},
   author={Li, Lianfa},
+  journal={The Visual Computer},
+  note={under review},
   year={2025}
 }
-```
+``` 
 
 ## Contact
 
